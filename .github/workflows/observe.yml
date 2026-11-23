@@ -1,0 +1,91 @@
+# OnchainCheck Observatory: the recording jobs, every 2 hours. OnchainCheck's Worker cron starts this workflow
+# (workflow_dispatch with a fine-grained token that can only run Actions here); there is no schedule because GitHub
+# drops many scheduled runs. Each job writes to OnchainCheck's Cloudflare D1 database over its REST API.
+# Secrets: CLOUDFLARE_API_TOKEN (a Cloudflare API token with Account > D1 > Edit only), ALCHEMY_KEY (EVM deployer
+# lookups; skipped without it).
+name: observe
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "Read GeckoTerminal only; write nothing to D1"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: observe
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ALCHEMY_KEY: ${{ secrets.ALCHEMY_KEY }}
+      CF_ACCOUNT_ID: a98982ee6f7c2c7c753ca29ab764910f
+      D1_DATABASE_ID: 494c8010-ddfb-442c-89f1-b911f9afa435 # agent-data-history (mainnet)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Discover new pools
+        run: |
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            node history-discover.mjs --dry
+          elif [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN secret not set yet; skipping"
+          else
+            node history-discover.mjs
+          fi
+      - name: Refresh DeFi yields (GET /defi/yields)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            node defi-yields.mjs --dry
+          elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            node defi-yields.mjs
+          fi
+      - name: Refresh DeFi TVL (GET /defi/tvl)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            node defi-tvl.mjs --dry
+          elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            node defi-tvl.mjs
+          fi
+      - name: Record X handles on Polymarket leaderboards (GET /x/wallets)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            node x-wallets.mjs --dry
+          elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            node x-wallets.mjs
+          fi
+      - name: Refresh the Hyperliquid leaderboard index (GET /hyperliquid/smart-money)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            node hl-leaders.mjs --dry
+          elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            node hl-leaders.mjs
+          fi
+      - name: Refresh Treasury auctions (GET /economy/calendar)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            node treasury-auctions.mjs --dry
+          elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            node treasury-auctions.mjs
+          fi
