@@ -11,7 +11,11 @@ What each job records:
   and 7 days (`/token`, `/tokens/screener`, `/track-record`).
 - `x-wallets.mjs`: X (Twitter) handles that Polymarket traders publish on the public leaderboards (`/x/wallets`,
   `/x/polymarket-bets`).
-- `hl-leaders.mjs`: the top 500 Hyperliquid accounts by P&L per window (`/hyperliquid/smart-money`).
+- `hl-leaders.mjs`: the top 500 Hyperliquid accounts by P&L per window (`/hyperliquid/smart-money`), one copy of
+  that leaderboard per day, and the open perp positions of the top ~75 accounts every run (opens, closes and flips).
+- `pm-record.mjs`: the busiest open Polymarket markets, which leaderboard traders are among each side's biggest
+  holders, the $5,000+ trades in them, and how each market resolved, so the record can say how often the top traders
+  were right (`/polymarket/*`, `/x/polymarket-bets`).
 - `defi-yields.mjs`, `defi-tvl.mjs`: DeFi yields and protocol TVL (`/defi/yields`, `/defi/tvl`).
 - `treasury-auctions.mjs`: upcoming US Treasury auctions (`/economy/calendar`).
 
@@ -24,4 +28,5 @@ Run a job yourself without writing anything:
 ```bash
 node history-discover.mjs --dry
 node hl-leaders.mjs --dry
+node pm-record.mjs --dry
 ```

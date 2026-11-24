@@ -23,7 +23,7 @@ concurrency:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       ALCHEMY_KEY: ${{ secrets.ALCHEMY_KEY }}
@@ -70,15 +70,25 @@ jobs:
           elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
             node x-wallets.mjs
           fi
-      - name: Refresh the Hyperliquid leaderboard index (GET /hyperliquid/smart-money)
+      - name: Hyperliquid leaderboard, its daily copy and the top accounts' positions (GET /hyperliquid/*)
         if: ${{ !cancelled() }}
         continue-on-error: true
-        timeout-minutes: 2
+        timeout-minutes: 4
         run: |
           if [ "${{ inputs.dry }}" = "true" ]; then
             node hl-leaders.mjs --dry
           elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
             node hl-leaders.mjs
+          fi
+      - name: Polymarket record - busiest markets, leaders' holdings, big trades, resolutions (GET /polymarket/*)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            node pm-record.mjs --dry
+          elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            node pm-record.mjs
           fi
       - name: Refresh Treasury auctions (GET /economy/calendar)
         if: ${{ !cancelled() }}
