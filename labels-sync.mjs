@@ -3,11 +3,13 @@ import { createRequire } from 'module'; const require = createRequire(import.met
 
 // src/history/labels.ts
 var DEPLOYER_SOURCE = "history";
+var FUNDER_SOURCE = "funders";
 function deployerLabelSql(ts) {
   const t = Math.floor(ts);
   return [
     `INSERT OR IGNORE INTO address_labels (chain, address, label, category, source, first_seen, last_seen, seen) SELECT chain, (CASE WHEN chain = 'solana' THEN deployer ELSE lower(deployer) END), 'token-deployer', 'deployer', '${DEPLOYER_SOURCE}', min(first_seen), ${t}, 1 FROM pools WHERE deployer IS NOT NULL AND deployer <> '' GROUP BY chain, (CASE WHEN chain = 'solana' THEN deployer ELSE lower(deployer) END);`,
-    `INSERT INTO address_labels (chain, address, label, category, source, first_seen, last_seen, seen) SELECT p.chain, (CASE WHEN p.chain = 'solana' THEN p.deployer ELSE lower(p.deployer) END), 'repeat-rugger', 'deployer', '${DEPLOYER_SOURCE}', ${t}, ${t}, 1 FROM pools p JOIN checks c ON c.chain = p.chain AND c.pool_key = p.pool_key WHERE c.gone = 1 AND p.deployer IS NOT NULL AND p.deployer <> '' GROUP BY p.chain, (CASE WHEN p.chain = 'solana' THEN p.deployer ELSE lower(p.deployer) END) HAVING count(DISTINCT p.pool_key) >= 2 ON CONFLICT (chain, address, category, label, source) DO UPDATE SET seen = seen + 1, last_seen = excluded.last_seen WHERE date(last_seen, 'unixepoch') < date(excluded.last_seen, 'unixepoch');`
+    `INSERT INTO address_labels (chain, address, label, category, source, first_seen, last_seen, seen) SELECT p.chain, (CASE WHEN p.chain = 'solana' THEN p.deployer ELSE lower(p.deployer) END), 'repeat-rugger', 'deployer', '${DEPLOYER_SOURCE}', ${t}, ${t}, 1 FROM pools p JOIN checks c ON c.chain = p.chain AND c.pool_key = p.pool_key WHERE c.gone = 1 AND p.deployer IS NOT NULL AND p.deployer <> '' GROUP BY p.chain, (CASE WHEN p.chain = 'solana' THEN p.deployer ELSE lower(p.deployer) END) HAVING count(DISTINCT p.pool_key) >= 2 ON CONFLICT (chain, address, category, label, source) DO UPDATE SET seen = seen + 1, last_seen = excluded.last_seen WHERE date(last_seen, 'unixepoch') < date(excluded.last_seen, 'unixepoch');`,
+    `INSERT OR IGNORE INTO address_labels (chain, address, label, category, source, first_seen, last_seen, seen) SELECT d.chain, (CASE WHEN d.chain = 'solana' THEN d.wallet ELSE lower(d.wallet) END), 'first-funded-by-' || f.kind || ':' || f.label, 'funder', '${FUNDER_SOURCE}', coalesce(d.funded_at, d.checked_at), ${t}, 1 FROM deployer_funders d JOIN funders f ON f.chain = d.chain AND f.address = d.funder WHERE d.funder IS NOT NULL AND f.kind IN ('exchange', 'bridge', 'hub') AND f.label IS NOT NULL AND f.label <> '';`
   ];
 }
 
