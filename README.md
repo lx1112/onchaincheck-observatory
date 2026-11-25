@@ -18,6 +18,10 @@ What each job records:
   were right (`/polymarket/*`, `/x/polymarket-bets`).
 - `defi-yields.mjs`, `defi-tvl.mjs`: DeFi yields and protocol TVL (`/defi/yields`, `/defi/tvl`).
 - `treasury-auctions.mjs`: upcoming US Treasury auctions (`/economy/calendar`).
+- `x402-reliability.mjs`: one unpaid request every 2 hours to each of the ~500 busiest x402 Bazaar listings (at most
+  15 per host, one request per host at a time), recording whether it answered a valid 402 payment challenge, how fast,
+  and at what price. Requests identify themselves as `OnchainCheck-reliability/1`. A seller who wants out can open an
+  issue here.
 
 The `.mjs` files are bundled builds; their source lives in a private repository. Everything they read is public data.
 The workflow runs only when OnchainCheck's scheduler starts it (`workflow_dispatch`), and needs two repository

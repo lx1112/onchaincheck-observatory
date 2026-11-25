@@ -99,3 +99,13 @@ jobs:
           elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
             node treasury-auctions.mjs
           fi
+      - name: x402 seller reliability - one unpaid request to each busy Bazaar listing (OnchainCheck moat step C)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 6
+        run: |
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            echo "dry run: x402-reliability needs D1 to read its listings; skipped"
+          elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            node x402-reliability.mjs
+          fi
