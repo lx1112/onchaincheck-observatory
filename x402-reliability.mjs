@@ -56,6 +56,7 @@ function priceOf(r) {
   const usd = Number(raw) / 10 ** USDC_DECIMALS;
   return usd > 0 && usd <= 1e3 ? Math.round(usd * 1e6) / 1e6 : null;
 }
+var normalizePayTo = (v) => /^0x[0-9a-fA-F]{40}$/.test(v) ? v.toLowerCase() : v.slice(0, 64);
 function classify(target, answer) {
   const base2 = { resource: target.resource, host: target.host, status: answer.status, ms: answer.ms, price_usd: null, pay_to: null };
   if (answer.status === null) {
@@ -66,7 +67,7 @@ function classify(target, answer) {
   if (answer.status !== 402) return { ...base2, outcome: "not_402", error: `HTTP ${answer.status}` };
   const req = parseChallenge(answer.header, answer.body);
   if (!req) return { ...base2, outcome: "bad_challenge", error: "402 without parseable payment requirements" };
-  return { ...base2, outcome: "ok", price_usd: priceOf(req), pay_to: typeof req.payTo === "string" ? req.payTo.slice(0, 64) : null, error: null };
+  return { ...base2, outcome: "ok", price_usd: priceOf(req), pay_to: typeof req.payTo === "string" ? normalizePayTo(req.payTo) : null, error: null };
 }
 function requestFor(t) {
   const headers = { "user-agent": PROBE_USER_AGENT, accept: "application/json" };
@@ -108,6 +109,21 @@ function runSql(ts2, probes2) {
   const ms = probes2.map((p) => p.ms).filter((x) => x !== null).sort((a, b) => a - b);
   const p50 = ms.length ? ms[Math.floor(ms.length / 2)] : null;
   return `INSERT OR REPLACE INTO x402_reliability_runs (ts, probed, ok, rate_limited, not_402, bad_challenge, server_error, no_answer, ms_p50, hosts) VALUES (${ts2}, ${probes2.length}, ${n("ok")}, ${n("rate_limited")}, ${n("not_402")}, ${n("bad_challenge")}, ${n("server_error")}, ${n("timeout") + n("unreachable")}, ${sqlNum(p50)}, ${new Set(probes2.map((p) => p.host)).size});`;
+}
+function labelSql(ts2, probes2) {
+  const pairs = /* @__PURE__ */ new Map();
+  for (const p of probes2) {
+    if (p.outcome !== "ok" || !p.pay_to || !/^0x[0-9a-f]{40}$/.test(p.pay_to)) continue;
+    pairs.set(`${p.pay_to} ${p.host}`, { address: p.pay_to, host: p.host });
+  }
+  const rows2 = [...pairs.values()].map((x) => `('evm', ${sqlText(x.address)}, ${sqlText(x.host)}, 'x402-seller', 'x402-reliability', ${ts2}, ${ts2}, 1)`);
+  const out = [];
+  for (let i = 0; i < rows2.length; i += 100) {
+    out.push(
+      "INSERT INTO address_labels (chain, address, label, category, source, first_seen, last_seen, seen) VALUES " + rows2.slice(i, i + 100).join(", ") + " ON CONFLICT (chain, address, category, label, source) DO UPDATE SET seen = seen + (CASE WHEN date(last_seen, 'unixepoch') < date(excluded.last_seen, 'unixepoch') THEN 1 ELSE 0 END), last_seen = excluded.last_seen;"
+    );
+  }
+  return out;
 }
 
 // scripts/lib/d1-any.ts
@@ -245,4 +261,9 @@ if (count("unreachable") + count("timeout") > probes.length * 0.8) {
   throw new Error("over 80% of probes got no answer: network problem on this runner; listings not recorded");
 }
 await db.exec([...upsertSql(day, ts, probes), runSql(ts, probes)], "x402-reliability");
+try {
+  await db.exec(labelSql(ts, probes), "x402-labels");
+} catch (e) {
+  console.error(`x402-reliability: labels not recorded: ${e}`);
+}
 console.log(`x402-reliability: recorded ${probes.length} checks for ${day}`);
