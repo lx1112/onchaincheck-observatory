@@ -22,6 +22,9 @@ What each job records:
   15 per host, one request per host at a time), recording whether it answered a valid 402 payment challenge, how fast,
   and at what price. Requests identify themselves as `OnchainCheck-reliability/1`. A seller who wants out can open an
   issue here.
+- `labels-sync.mjs`: adds address labels inside the database from what the jobs above recorded: each wallet that
+  deployed a token we saw a pool for, and deployers with two or more pools whose liquidity went to about zero. No
+  outside requests.
 
 The `.mjs` files are bundled builds; their source lives in a private repository. Everything they read is public data.
 The workflow runs only when OnchainCheck's scheduler starts it (`workflow_dispatch`), and needs two repository

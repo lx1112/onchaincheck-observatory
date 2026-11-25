@@ -109,3 +109,13 @@ jobs:
           elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
             node x402-reliability.mjs
           fi
+      - name: Address labels - token deployers and repeat deployers from the recorded pools (OnchainCheck moat step E)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            echo "dry run: labels-sync writes to D1; skipped"
+          elif [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            node labels-sync.mjs
+          fi
