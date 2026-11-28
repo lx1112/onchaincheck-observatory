@@ -6,20 +6,31 @@ var PROBE_TOP = 500;
 var PROBE_PER_HOST = 15;
 var PROBE_TIMEOUT_MS = 1e4;
 var PROBE_USER_AGENT = "OnchainCheck-reliability/1 (+https://onchaincheck.dev; unpaid x402 availability check)";
-function pickTargets(rows2, top2 = PROBE_TOP, perHost = PROBE_PER_HOST) {
+var OWN_HOSTS = /* @__PURE__ */ new Set(["onchaincheck.dev", "ca-tax-api-mainnet.lxtap.workers.dev"]);
+function pickTargets(rows2, top2 = PROBE_TOP, perHost = PROBE_PER_HOST, own2 = OWN_HOSTS) {
   const perHostCount = /* @__PURE__ */ new Map();
   const out = [];
-  for (const r of [...rows2].sort((a, b) => b.payers30d - a.payers30d || a.resource.localeCompare(b.resource))) {
-    if (!/^(GET|POST|PUT|PATCH|DELETE)$/.test(r.method)) continue;
-    if (!/^https:\/\//.test(r.resource)) continue;
-    if (/\/:[A-Za-z_]|[{}]/.test(r.resource)) continue;
+  const callable = (r) => /^(GET|POST|PUT|PATCH|DELETE)$/.test(r.method) && /^https:\/\//.test(r.resource) && !/\/:[A-Za-z_]|[{}]/.test(r.resource);
+  const sorted = [...rows2].sort((a, b) => b.payers30d - a.payers30d || a.resource.localeCompare(b.resource));
+  const mine = sorted.filter((r) => own2.has(r.host) && callable(r));
+  for (const r of sorted) {
+    if (own2.has(r.host) || !callable(r)) continue;
     const n = perHostCount.get(r.host) ?? 0;
     if (n >= perHost) continue;
     perHostCount.set(r.host, n + 1);
     out.push(r);
     if (out.length >= top2) break;
   }
-  return out;
+  return [...out, ...mine];
+}
+var OWN_ROUTE_LIST = "https://onchaincheck.dev/.well-known/x402";
+function ownTargets(wellKnown) {
+  const list = wellKnown?.resources ?? [];
+  return list.filter((r) => typeof r.resource === "string" && /^https:\/\//.test(r.resource)).map((r) => ({ resource: r.resource, host: new URL(r.resource).host, method: (r.method ?? "GET").toUpperCase(), input_example: null, price_usd: null, payers30d: 0 }));
+}
+function withOwn(rows2, own2) {
+  const seen = new Set(rows2.map((r) => r.resource));
+  return [...rows2, ...own2.filter((r) => !seen.has(r.resource))];
 }
 var USDC_DECIMALS = 6;
 var decodeHeader = (v) => {
@@ -218,7 +229,11 @@ var db = d1From(args);
 var rows = await db.query(
   "SELECT resource, host, method, input_example, price_usd, payers30d FROM x402_endpoints WHERE day = (SELECT max(day) FROM x402_endpoints) ORDER BY payers30d DESC LIMIT 5000"
 );
-var targets = pickTargets(rows, top);
+var own = await fetch(OWN_ROUTE_LIST, { signal: AbortSignal.timeout(1e4) }).then((r) => r.json()).then(ownTargets).catch((e) => {
+  console.error(`own route list: ${e.message}`);
+  return [];
+});
+var targets = pickTargets(withOwn(rows, own), top);
 if (!targets.length) throw new Error("x402_endpoints is empty: run npm run x402-endpoints first");
 var ts = Math.floor(Date.now() / 1e3);
 var day = new Date(ts * 1e3).toISOString().slice(0, 10);

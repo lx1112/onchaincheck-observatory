@@ -4046,7 +4046,7 @@ var CHECKS = {
   "24h": { after: DAY, until: 2 * DAY },
   "48h": { after: 2 * DAY, until: 4 * DAY },
   "7d": { after: 7 * DAY, until: 10 * DAY },
-  // Slow rugs and quiet deaths come after a week (notes/data-moat-options.md D2; since 2026-10-27).
+  // Slow rugs and quiet deaths come after a week (archive/notes/data-moat-options.md D2; since 2026-10-27).
   "30d": { after: 30 * DAY, until: 33 * DAY }
 };
 var CHECK_KINDS = Object.keys(CHECKS);
